@@ -1,0 +1,59 @@
+version: "1.0"
+
+name: "example-stack"
+display_name: Example Stack
+description: "Deploys a simple EC2 instance with security group on AWS"
+
+provider: my-aws-satellite
+
+variables:
+  instance_type:
+    type: string
+    default: t2.micro
+    description: EC2 instance size
+
+  environment:
+    type: string
+    default: dev
+    allowed: [dev, staging, prod]
+
+data:
+  my_network:
+    type: aws/network
+    properties:
+      name: some_private_network
+
+resources:
+  ec2_instance:
+    type: aws/instance
+    depends_on: [my_security_group]
+    properties:
+      ami: ami-0abcdef1234567890
+      instance_type: "${var.instance_type}"
+      interfaces:
+        - address: 192.168.1.1
+          network: "${data.my_network.id}"
+      tags:
+        Name: "example-instance"
+        Environment: "${var.environment}"
+
+  my_security_group:
+    type: aws/security_group
+    properties:
+      name: "example-sg"
+      description: "Allow SSH"
+      ingress:
+        - protocol: tcp
+          from_port: 22
+          to_port: 22
+          cidr_blocks: ["0.0.0.0/0"]
+      tags:
+        Name: "example-sg"
+
+outputs:
+  instance_id:
+    value: "${resource.ec2_instance.id}"
+    description: "The ID of the EC2 instance"
+
+  public_ip:
+    value: "${resource.ec2_instance.public_ip}"
