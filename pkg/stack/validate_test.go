@@ -88,8 +88,8 @@ func TestStackValidate(t *testing.T) {
 			Inputs: map[string]stack.Input{
 				"region": {Type: "string", Required: true},
 			},
+			Secrets:             map[string]stack.Secret{},
 			RegisteredVariables: map[string]map[string]any{},
-			Secrets:             map[string]string{},
 		}
 		err := s.Validate()
 		assert.NoError(t, err)

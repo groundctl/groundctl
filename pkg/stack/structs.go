@@ -6,7 +6,7 @@ type Stack struct {
 	DisplayName string            `yaml:"display_name"`
 	Description string            `yaml:"description"`
 	Provider    Provider          `yaml:"provider"`
-	Secrets     map[string]string `yaml:"secrets,omitempty"`
+	Secrets     map[string]Secret `yaml:"secrets,omitempty"`
 	Inputs      map[string]Input  `yaml:"inputs,omitempty"`
 	Layers      []Layer           `yaml:"layers"`
 	Outputs     map[string]Output `yaml:"outputs"`
