@@ -15,6 +15,6 @@ Stacks are groundctl's environment templates.`,
 
 func init() {
 	StackCmd.AddCommand(
-		validateCmd,
+		checkCmd,
 	)
 }
