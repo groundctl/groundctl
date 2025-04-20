@@ -34,8 +34,12 @@ func TestStack_PlanPreview(t *testing.T) {
 					},
 				},
 			},
-			Secrets: map[string]string{
-				"db_password": "string",
+			Secrets: map[string]stack.Secret{
+				"db_password": {
+					Type:        "string",
+					Label:       "Database password",
+					Description: "Password for the PostgreSQL database",
+				},
 			},
 			Layers: []stack.Layer{
 				{

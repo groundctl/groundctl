@@ -13,7 +13,9 @@ var (
 
 // Parse reads in a stack template file and parses into a Stack struct
 func Parse(data []byte) (*Stack, error) {
-	var stack Stack
+	stack := Stack{
+		RegisteredVariables: make(map[string]map[string]any),
+	}
 	if err := yaml.Unmarshal(data, &stack); err != nil {
 		return nil, err
 	}
