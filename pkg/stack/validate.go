@@ -2,9 +2,7 @@ package stack
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
-	"text/template"
 
 	"github.com/sirupsen/logrus"
 )
@@ -164,54 +162,6 @@ func (s *Stack) validateTemplates() error {
 			err := tmplCheck(s.Layers[i].Steps[j].Params)
 			if err != nil {
 				return fmt.Errorf("invalid template in step '%s' in layer '%s': %w", s.Layers[i].Steps[j].Name, s.Layers[i].Name, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func (s *Stack) validateTemplateSyntax(tmplStr string) error {
-	// Validate the template syntax
-	_, err := template.New("").Parse(tmplStr)
-	if err != nil {
-		return fmt.Errorf("template syntax error: %w", err)
-	}
-	return nil
-}
-
-func (s *Stack) validateTemplateIdentifiers(tmplStr string) error {
-	// Simple regex to extract expressions like {{ x.y.z | something }}
-	re := regexp.MustCompile(`{{\s*([^{}\s|]+)`)
-	matches := re.FindAllStringSubmatch(tmplStr, -1)
-
-	for _, match := range matches {
-		raw := match[1] // e.g., "input.foo", "my_var.bar"
-		parts := strings.Split(raw, ".")
-		if len(parts) == 0 {
-			continue
-		}
-
-		// Check root identifier
-		root := parts[0]
-		if root == "input" || root == "secret" {
-			if len(parts) < 2 {
-				return fmt.Errorf("%s is referenced without key (e.g. '{{ %s.example_value }}')", root, root)
-			}
-			key := fmt.Sprintf("%s.%s", root, parts[1])
-			if root == "input" {
-				if _, ok := s.Inputs[key]; !ok {
-					return fmt.Errorf("input '%s' not found", parts[1])
-				}
-			} else {
-				if _, ok := s.Secrets[key]; !ok {
-					return fmt.Errorf("secret '%s' not found", parts[1])
-				}
-			}
-		} else {
-			// Treat as registered variable
-			if _, ok := s.RegisteredVariables[root]; !ok {
-				return fmt.Errorf("references undefined registered variable '%s'", root)
 			}
 		}
 	}
