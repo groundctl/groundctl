@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"github.com/sirupsen/logrus"
 )
 
 // Validate will ensure all fields in the stack template are valid
@@ -29,6 +31,7 @@ func (s *Stack) Validate() error {
 }
 
 func (s *Stack) validateMetadata() error {
+	logrus.WithField("stack", s.Name).Trace("Validating stack metadata")
 	if s.Version == "" || s.Name == "" || s.Provider.Type == "" {
 		return fmt.Errorf("stack is missing required metadata fields")
 	}
@@ -36,6 +39,7 @@ func (s *Stack) validateMetadata() error {
 }
 
 func (s *Stack) validateInputs() error {
+	logrus.WithField("stack", s.Name).Trace("Validating stack inputs")
 	for name, input := range s.Inputs {
 		if input.Type == "" {
 			return fmt.Errorf("input '%s' must have a type", name)
@@ -60,6 +64,7 @@ func (s *Stack) validateInputs() error {
 }
 
 func (s *Stack) validateLayers() error {
+	logrus.WithField("stack", s.Name).Trace("Validating stack layers")
 	for _, layer := range s.Layers {
 		if layer.Name == "" {
 			return fmt.Errorf("layer is missing a name")
@@ -73,6 +78,7 @@ func (s *Stack) validateLayers() error {
 }
 
 func (l *Layer) validateSteps() error {
+	logrus.WithField("layer", l.Name).Trace("Validating layer steps")
 	for _, step := range l.Steps {
 		if step.Name == "" || step.Action == "" {
 			return fmt.Errorf("step in layer '%s' is missing name or action", l.Name)
@@ -82,6 +88,7 @@ func (l *Layer) validateSteps() error {
 }
 
 func (s *Stack) validateTemplates() error {
+	logrus.WithField("stack", s.Name).Trace("Validating stack templates")
 	var tmplCheck func(val any) error
 	tmplCheck = func(val any) error {
 		switch v := val.(type) {

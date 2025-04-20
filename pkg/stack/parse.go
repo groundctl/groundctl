@@ -3,6 +3,7 @@ package stack
 import (
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -13,20 +14,27 @@ var (
 
 // Parse reads in a stack template file and parses into a Stack struct
 func Parse(data []byte) (*Stack, error) {
+	logrus.Tracef("Parsing stack of %d bytes", len(data))
 	stack := Stack{
 		RegisteredVariables: make(map[string]map[string]any),
 	}
 	if err := yaml.Unmarshal(data, &stack); err != nil {
 		return nil, err
 	}
+	logrus.Tracef("Identified stack %q", stack.Name)
+	logrus.Tracef("Identified provider %q", stack.Provider.Type)
+	logrus.Tracef("Identified %d layers", len(stack.Layers))
 
 	// Parse the actions out of all the steps
 	for i := range stack.Layers {
+		logrus.WithField("layer", stack.Layers[i].Name).Tracef("Parsing layer steps")
 		for j := range stack.Layers[i].Steps {
+			logrus.WithField("step", stack.Layers[i].Steps[j].Name).Tracef("Parsing step")
 			// Parse the action names from the steps
 			if err := stack.Layers[i].Steps[j].parseAction(); err != nil {
 				return nil, err
 			}
+			logrus.WithField("step", stack.Layers[i].Steps[j].Name).Tracef("Found action %q", stack.Layers[i].Steps[j].Action)
 			// Register the variable name as a placeholder in the stack
 			if stack.Layers[i].Steps[j].Register != "" {
 				varName := stack.Layers[i].Steps[j].Register
@@ -41,6 +49,7 @@ func Parse(data []byte) (*Stack, error) {
 					return nil, fmt.Errorf("variable '%s' in step '%s' already defined", varName, stack.Layers[i].Steps[j].Name)
 				}
 				stack.RegisteredVariables[varName] = make(map[string]any)
+				logrus.WithField("step", stack.Layers[i].Steps[j].Name).Tracef("Registers var %q", varName)
 			}
 		}
 	}
