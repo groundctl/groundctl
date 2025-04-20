@@ -1,47 +1,50 @@
-package stack
+package stack_test
 
 import (
-	"os"
 	"testing"
 
+	"github.com/groundctl/groundctl/pkg/stack"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// Unit test to parse example_stack.yml
-func TestParseExampleStack(t *testing.T) {
-	data, err := os.ReadFile("example_stack.yml")
-	assert.NoError(t, err)
+func TestStackParse(t *testing.T) {
+	t.Run("parse valid stack template", func(t *testing.T) {
+		yamlData := `
+version: "1.0"
+name: "sample"
+display_name: "Sample"
+description: "Test stack"
+provider:
+  type: git@github.com:example/provider
+layers:
+  - name: setup
+    steps:
+      - name: do something
+        test.action:
+          key: value
+`
+		stk, err := stack.Parse([]byte(yamlData))
+		require.NoError(t, err)
+		assert.Equal(t, "sample", stk.Name)
+		assert.Equal(t, "test.action", stk.Layers[0].Steps[0].Action)
+		assert.Equal(t, map[string]any{"key": "value"}, stk.Layers[0].Steps[0].Params)
 
-	stack, err := Parse(data)
-	assert.NoError(t, err)
+	})
 
-	t.Run("parse template", func(t *testing.T) {
-		// Assert general fields
-		assert.Equal(t, "example-stack", stack.Name)
-		assert.Equal(t, "Example Stack", stack.DisplayName)
-		assert.Equal(t, "Deploys a simple EC2 instance with security group on AWS", stack.Description)
-		assert.Equal(t, "my-aws-satellite", stack.Provider)
-
-		// Check variable parsing
-		instanceType, ok := stack.Variables["instance_type"]
-		assert.True(t, ok)
-		assert.Equal(t, VarTypeString, instanceType.Type)
-		assert.Equal(t, "t2.micro", instanceType.Default)
-
-		env, ok := stack.Variables["environment"]
-		assert.True(t, ok)
-		assert.Equal(t, VarTypeString, env.Type)
-		assert.Equal(t, "dev", env.Default)
-		assert.ElementsMatch(t, []interface{}{"dev", "staging", "prod"}, env.Allowed)
-
-		// Check resource parsing
-		ec2, ok := stack.Resources["ec2_instance"]
-		assert.True(t, ok)
-		assert.Equal(t, "aws/instance", ec2.Type)
-		assert.NotEmpty(t, ec2.Properties["instance_type"])
-
-		// Check the validation for depends_on
-		err = stack.ValidateReferences()
-		assert.NoError(t, err) // should pass, no missing dependencies
+	t.Run("parse invalid stack template", func(t *testing.T) {
+		yamlData := `
+version: "1.0"
+name: "bad"
+provider:
+  type: example
+layers:
+  - name: badlayer
+    steps:
+      - name: invalid
+        test.action: string_instead_of_map
+`
+		_, err := stack.Parse([]byte(yamlData))
+		assert.Error(t, err)
 	})
 }

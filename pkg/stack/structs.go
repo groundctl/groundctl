@@ -1,45 +1,60 @@
 package stack
 
 type Stack struct {
-	Name        string                   `yaml:"name"`
-	DisplayName string                   `yaml:"display_name,omitempty"`
-	Description string                   `yaml:"description"`
-	Provider    string                   `yaml:"provider"`
-	Variables   map[string]StackVariable `yaml:"variables"`
-	Data        map[string]StackData     `yaml:"data"`
-	Resources   map[string]StackResource `yaml:"resources,omitempty"`
-	Outputs     map[string]StackOutput   `yaml:"outputs,omitempty"`
-	Imports     []string                 `yaml:"imports,omitempty"`
+	Version     string            `yaml:"version"`
+	Name        string            `yaml:"name"`
+	DisplayName string            `yaml:"display_name"`
+	Description string            `yaml:"description"`
+	Provider    Provider          `yaml:"provider"`
+	Secrets     map[string]string `yaml:"secrets,omitempty"`
+	Inputs      map[string]Input  `yaml:"inputs,omitempty"`
+	Layers      []Layer           `yaml:"layers"`
+	Outputs     map[string]Output `yaml:"outputs"`
+	// Contains all registered variables from steps that contain a "register" attribute
+	RegisteredVariables map[string]map[string]any
 }
 
-type StackVarType string
-
-const (
-	VarTypeString StackVarType = "string"
-	VarTypeInt    StackVarType = "int"
-	VarTypeFloat  StackVarType = "float"
-	VarTypeIP     StackVarType = "ip"
-)
-
-type StackVariable struct {
-	Type    StackVarType  `yaml:"type"`
-	Default string        `yaml:"default"`
-	Allowed []interface{} `yaml:"allowed,omitempty"`
+type Provider struct {
+	Type       string         `yaml:"type"`
+	Properties map[string]any `yaml:"properties,omitempty"`
 }
 
-type StackData struct {
-	Type       string                 `yaml:"type"`
-	Properties map[string]interface{} `yaml:"properties"`
+type Secret struct {
+	Type        string         `yaml:"type"`
+	Allowed     []AllowedValue `yaml:"allowed,omitempty"`
+	Description string         `yaml:"description,omitempty"`
+	Label       string         `yaml:"label,omitempty"`
 }
 
-type StackResource struct {
-	Type       string                 `yaml:"type"`
-	Properties map[string]interface{} `yaml:"properties"`
-	DependsOn  []string               `yaml:"depends_on"`
+type Input struct {
+	Type        string         `yaml:"type"`
+	Default     any            `yaml:"default"`
+	Allowed     []AllowedValue `yaml:"allowed,omitempty"`
+	Required    bool           `yaml:"required,omitempty"`
+	Description string         `yaml:"description,omitempty"`
+	Label       string         `yaml:"label,omitempty"`
 }
 
-type StackOutput struct {
-	Label       string `yaml:"label"`
-	Description string `yaml:"description"`
+type AllowedValue struct {
+	Label string `yaml:"label"`
+	Value any    `yaml:"value"`
+}
+
+type Layer struct {
+	Name  string `yaml:"name"`
+	Steps []Step `yaml:"steps"`
+}
+
+type Step struct {
+	Name     string         `yaml:"name"`
+	Action   string         `yaml:"-"`
+	Params   map[string]any `yaml:"-"`
+	Register string         `yaml:"register,omitempty"`
+	Tags     []string       `yaml:"tags,omitempty"`
+	Raw      map[string]any `yaml:",inline"`
+}
+
+type Output struct {
 	Value       string `yaml:"value"`
+	Description string `yaml:"description"`
 }
