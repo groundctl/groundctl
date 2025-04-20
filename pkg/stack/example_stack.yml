@@ -1,59 +1,92 @@
 version: "1.0"
 
-name: "example-stack"
-display_name: Example Stack
-description: "Deploys a simple EC2 instance with security group on AWS"
+name: "web-app-stack"
+display_name: "Web Application Stack"
+description: "Deploys a simple web application with VPC, EC2 instance, and security group"
 
-provider: my-aws-satellite
+provider:
+  type: github.com/groundctl/aws-provider # or github.com/groundctl/aws-provider
+  properties:
+    access_key: "{{ $.secret.aws_access_key }}"
+    secret_key: "{{ $.secret.aws_secret_key }}"
 
-variables:
-  instance_type:
+# Same as inputs, but defined/stored elsewhere, always required, and injected at deploy-time
+secrets:
+  aws_access_key:
     type: string
-    default: t2.micro
-    description: EC2 instance size
+    label: AWS Access Key
+    description: The production environment AWS access key
+  aws_secret_key:
+    type: string
+    label: AWS Secret Key
+    description: The production environment AWS secret key
 
+inputs:
   environment:
     type: string
-    default: dev
-    allowed: [dev, staging, prod]
+    allowed:
+      - label: Development
+        value: dev
+      - label: Staging,
+        value: staging
+      - label: Production
+        value: prod
+    required: true
+    description: Target environment for this deployment
+    label: Environment
 
-data:
-  my_network:
-    type: aws/network
-    properties:
-      name: some_private_network
+  instance_type:
+    type: string
+    default: t3.micro
+    description: EC2 instance size
+    label: EC2 Instance Type
 
-resources:
-  ec2_instance:
-    type: aws/instance
-    depends_on: [my_security_group]
-    properties:
-      ami: ami-0abcdef1234567890
-      instance_type: "${var.instance_type}"
-      interfaces:
-        - address: 192.168.1.1
-          network: "${data.my_network.id}"
-      tags:
-        Name: "example-instance"
-        Environment: "${var.environment}"
+layers:
+  - name: networking
+    steps:
+      - name: Create VPC
+        aws.vpc:
+          name: my-vpc
+          cidr_block: 10.0.0.0/16
+        register: my_vpc
 
-  my_security_group:
-    type: aws/security_group
-    properties:
-      name: "example-sg"
-      description: "Allow SSH"
-      ingress:
-        - protocol: tcp
-          from_port: 22
-          to_port: 22
-          cidr_blocks: ["0.0.0.0/0"]
-      tags:
-        Name: "example-sg"
+      - name: Create Subnet
+        aws.subnet:
+          name: my-subnet
+          vpc_id: "{{ $.my_vpc.id }}"
+          cidr_block: 10.0.1.0/24
+        register: my_subnet
+
+  - name: compute
+    steps:
+      - name: Create Security Group
+        aws.security_group:
+          name: "web-sg-{{ $.input.environment }}"
+          description: Allow HTTP and SSH
+          ingress:
+            - protocol: tcp
+              from_port: 80
+              to_port: 80
+              cidr_blocks: ["0.0.0.0/0"]
+            - protocol: tcp
+              from_port: 22
+              to_port: 22
+              cidr_blocks: ["0.0.0.0/0"]
+        register: web_sg
+
+      - name: Launch EC2 Instance
+        aws.ec2:
+          ami: ami-1234567890abcdef0
+          instance_type: "{{ $.input.instance_type }}"
+          subnet_id: "{{ $.my_subnet.id }}"
+          security_groups: ["{{ $.web_sg.id }}"]
+        register: web_instance
 
 outputs:
   instance_id:
-    value: "${resource.ec2_instance.id}"
-    description: "The ID of the EC2 instance"
+    value: "{{ $.web_instance.id }}"
+    description: "ID of the deployed EC2 instance"
 
   public_ip:
-    value: "${resource.ec2_instance.public_ip}"
+    value: "{{ $.web_instance.public_ip }}"
+    description: "Public IP address of the instance"

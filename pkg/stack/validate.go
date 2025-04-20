@@ -4,166 +4,210 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"text/template"
 )
 
-func (s *Stack) ValidateDependsOn() error {
-	// Track cyclic references
-	visited := map[string]bool{}
-	stackPath := map[string]bool{}
-
-	var visit func(name string) error
-	visit = func(name string) error {
-		if stackPath[name] {
-			return fmt.Errorf("cyclic dependency detected involving resource %q", name)
-		}
-		if visited[name] {
-			return nil
-		}
-
-		visited[name] = true
-		stackPath[name] = true
-
-		res, ok := s.Resources[name]
-		if !ok {
-			return nil
-		}
-
-		for _, dep := range res.DependsOn {
-			if err := visit(dep); err != nil {
-				return err
-			}
-		}
-
-		stackPath[name] = false
-		return nil
+// Validate will ensure all fields in the stack template are valid
+func (s *Stack) Validate() error {
+	// Validate metadata fields
+	if err := s.validateMetadata(); err != nil {
+		return err
 	}
+	// Validate inputs
+	if err := s.validateInputs(); err != nil {
+		return err
+	}
+	// Validate layers (and steps)
+	if err := s.validateLayers(); err != nil {
+		return err
+	}
+	// Validate all templates
+	if err := s.validateTemplates(); err != nil {
+		return err
+	}
+	return nil
+}
 
-	for resName, res := range s.Resources {
-		for _, dep := range res.DependsOn {
-			_, exists := s.Resources[dep]
-			if !exists {
-				return fmt.Errorf("resource %q depends on non-existent resource %q", resName, dep)
+func (s *Stack) validateMetadata() error {
+	if s.Version == "" || s.Name == "" || s.Provider.Type == "" {
+		return fmt.Errorf("stack is missing required metadata fields")
+	}
+	return nil
+}
+
+func (s *Stack) validateInputs() error {
+	for name, input := range s.Inputs {
+		if input.Type == "" {
+			return fmt.Errorf("input '%s' must have a type", name)
+		}
+		if !input.Required && input.Default == nil {
+			return fmt.Errorf("input '%s' is not required but has no default value", name)
+		}
+		if len(input.Allowed) > 0 && input.Default != nil {
+			allowed := false
+			for _, val := range input.Allowed {
+				if input.Default == val.Value {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return fmt.Errorf("default value of input '%s' is not in the allowed list", name)
 			}
 		}
+	}
+	return nil
+}
 
-		if err := visit(resName); err != nil {
+func (s *Stack) validateLayers() error {
+	for _, layer := range s.Layers {
+		if layer.Name == "" {
+			return fmt.Errorf("layer is missing a name")
+		}
+		// Validate steps
+		if err := layer.validateSteps(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// Regex pattern to capture references like ${ec2_instance.public_ip} or ${var.environment}
-var referencePattern = regexp.MustCompile(`\$\{([^}]*)\}`)
-
-func (s *Stack) ValidateReferences() error {
-	// Make a list of all possible reference keys
-	allKeys := make(map[string]struct{})
-	for k := range s.Resources {
-		allKeys["resource."+k] = struct{}{}
-	}
-	for k := range s.Data {
-		allKeys["data."+k] = struct{}{}
-	}
-	for k := range s.Variables {
-		allKeys["var."+k] = struct{}{}
-	}
-
-	// Build reference graph
-	graph := make(map[string][]string)
-
-	// Traverse and build graph from all resources, data, outputs
-	for name, r := range s.Resources {
-		node := "resource." + name
-		if err := walkWithGraph(r.Properties, node, allKeys, graph); err != nil {
-			return err
+func (l *Layer) validateSteps() error {
+	for _, step := range l.Steps {
+		if step.Name == "" || step.Action == "" {
+			return fmt.Errorf("step in layer '%s' is missing name or action", l.Name)
 		}
 	}
-	for name, d := range s.Data {
-		node := "data." + name
-		if err := walkWithGraph(d.Properties, node, allKeys, graph); err != nil {
-			return err
-		}
-	}
-	for name, o := range s.Outputs {
-		node := "output." + name
-		if err := walkWithGraph(o.Value, node, allKeys, graph); err != nil {
-			return err
-		}
-	}
+	return nil
+}
 
-	// Detect cycles in reference graph
-	visited := make(map[string]bool)
-	stack := make(map[string]bool)
-
-	var visit func(string) error
-	visit = func(n string) error {
-		if stack[n] {
-			return fmt.Errorf("cyclic reference detected involving %q", n)
-		}
-		if visited[n] {
-			return nil
-		}
-		visited[n] = true
-		stack[n] = true
-
-		for _, dep := range graph[n] {
-			if err := visit(dep); err != nil {
+func (s *Stack) validateTemplates() error {
+	var tmplCheck func(val any) error
+	tmplCheck = func(val any) error {
+		switch v := val.(type) {
+		case string:
+			// Check if string contains a template
+			if !strings.Contains(v, "{{") {
+				return nil
+			}
+			varPaths, err := ExtractVariablePaths(v)
+			if err != nil {
 				return err
 			}
-		}
 
-		stack[n] = false
+			// Validate each variable path
+			for _, parts := range varPaths {
+				if len(parts) == 0 {
+					continue
+				}
+				root := parts[0]
+
+				switch root {
+				case "input":
+					if len(parts) < 2 {
+						return fmt.Errorf("invalid input reference: '%s' (missing key)", strings.Join(parts, "."))
+					}
+					if _, ok := s.Inputs[parts[1]]; !ok {
+						return fmt.Errorf("undefined input '%s'", parts[1])
+					}
+				case "secret":
+					if len(parts) < 2 {
+						return fmt.Errorf("invalid secret reference: '%s' (missing key)", strings.Join(parts, "."))
+					}
+					if _, ok := s.Secrets[parts[1]]; !ok {
+						return fmt.Errorf("undefined secret '%s'", parts[1])
+					}
+				default:
+					// Treat everything else as a registered variable
+					if _, ok := s.RegisteredVariables[root]; !ok {
+						return fmt.Errorf("undefined registered variable: '%s'", root)
+					}
+				}
+			}
+			return nil
+		case map[string]any:
+			for _, val := range v {
+				err := tmplCheck(val)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		case []any:
+			for i := range v {
+				err := tmplCheck(v[i])
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		return nil
 	}
 
-	for n := range graph {
-		if err := visit(n); err != nil {
-			return err
+	// Validate provider properties
+	err := tmplCheck(s.Provider.Properties)
+	if err != nil {
+		return fmt.Errorf("failed to resolve provider properties: %w", err)
+	}
+
+	// Validate each step’s params
+	for i := range s.Layers {
+		for j := range s.Layers[i].Steps {
+			err := tmplCheck(s.Layers[i].Steps[j].Params)
+			if err != nil {
+				return fmt.Errorf("invalid template in step '%s' in layer '%s': %w", s.Layers[i].Steps[j].Name, s.Layers[i].Name, err)
+			}
 		}
 	}
 
 	return nil
 }
 
-// walkWithGraph validates references and builds a dependency graph
-func walkWithGraph(val any, current string, allKeys map[string]struct{}, graph map[string][]string) error {
-	switch v := val.(type) {
-	case map[string]any:
-		for _, v := range v {
-			if err := walkWithGraph(v, current, allKeys, graph); err != nil {
-				return err
-			}
+func (s *Stack) validateTemplateSyntax(tmplStr string) error {
+	// Validate the template syntax
+	_, err := template.New("").Parse(tmplStr)
+	if err != nil {
+		return fmt.Errorf("template syntax error: %w", err)
+	}
+	return nil
+}
+
+func (s *Stack) validateTemplateIdentifiers(tmplStr string) error {
+	// Simple regex to extract expressions like {{ x.y.z | something }}
+	re := regexp.MustCompile(`{{\s*([^{}\s|]+)`)
+	matches := re.FindAllStringSubmatch(tmplStr, -1)
+
+	for _, match := range matches {
+		raw := match[1] // e.g., "input.foo", "my_var.bar"
+		parts := strings.Split(raw, ".")
+		if len(parts) == 0 {
+			continue
 		}
-	case []any:
-		for _, item := range v {
-			if err := walkWithGraph(item, current, allKeys, graph); err != nil {
-				return err
-			}
-		}
-	default:
-		valStr := fmt.Sprint(v)
-		matches := referencePattern.FindAllStringSubmatch(valStr, -1)
-		for _, match := range matches {
-			if len(match) < 2 || match[1] == "" {
-				return fmt.Errorf("invalid reference %s", match[0])
-			}
-			ref := match[1]
-			parts := strings.Split(ref, ".")
+
+		// Check root identifier
+		root := parts[0]
+		if root == "input" || root == "secret" {
 			if len(parts) < 2 {
-				return fmt.Errorf("invalid reference %s", match[0])
+				return fmt.Errorf("%s is referenced without key (e.g. '{{ %s.example_value }}')", root, root)
 			}
-			prefix := parts[0]
-			key := parts[1]
-
-			qualified := prefix + "." + key
-			if _, ok := allKeys[qualified]; !ok {
-				return fmt.Errorf("invalid reference %s", match[0])
+			key := fmt.Sprintf("%s.%s", root, parts[1])
+			if root == "input" {
+				if _, ok := s.Inputs[key]; !ok {
+					return fmt.Errorf("input '%s' not found", parts[1])
+				}
+			} else {
+				if _, ok := s.Secrets[key]; !ok {
+					return fmt.Errorf("secret '%s' not found", parts[1])
+				}
 			}
-
-			// Build graph edge
-			graph[current] = append(graph[current], qualified)
+		} else {
+			// Treat as registered variable
+			if _, ok := s.RegisteredVariables[root]; !ok {
+				return fmt.Errorf("references undefined registered variable '%s'", root)
+			}
 		}
 	}
+
 	return nil
 }
