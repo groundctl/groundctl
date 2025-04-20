@@ -1,4 +1,4 @@
-package stack
+package check
 
 import (
 	"github.com/groundctl/groundctl/internal/cli/stack"
@@ -7,7 +7,7 @@ import (
 
 var c stack.CheckCmd
 
-var checkCmd = &cobra.Command{
+var CheckCmd = &cobra.Command{
 	Use:   "check filename",
 	Short: "Parse and validate a stack template file.",
 	Long: `Parse and validate a stack template file.
@@ -17,7 +17,4 @@ Stacks are groundctl's environment templates.`,
 	Args:    cobra.ExactArgs(1),
 	Example: "groundctl check example.stack",
 	RunE:    c.Run,
-}
-
-func init() {
 }
