@@ -27,7 +27,7 @@ inputs:
     allowed:
       - label: Development
         value: dev
-      - label: Staging,
+      - label: Staging
         value: staging
       - label: Production
         value: prod

@@ -1,11 +1,11 @@
-package main
+package version
 
 import (
 	"github.com/groundctl/groundctl/internal/cli"
 	"github.com/spf13/cobra"
 )
 
-var versionCmd = &cobra.Command{
+var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Display version",
 	Long:  "Display version and environment info.",

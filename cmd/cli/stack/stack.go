@@ -1,6 +1,8 @@
 package stack
 
 import (
+	"github.com/groundctl/groundctl/cmd/cli/stack/check"
+	"github.com/groundctl/groundctl/cmd/cli/stack/preview"
 	"github.com/spf13/cobra"
 )
 
@@ -15,6 +17,7 @@ Stacks are groundctl's environment templates.`,
 
 func init() {
 	StackCmd.AddCommand(
-		checkCmd,
+		check.CheckCmd,
+		preview.PreviewCmd,
 	)
 }

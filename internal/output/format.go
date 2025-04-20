@@ -16,11 +16,13 @@ const (
 
 var FormatIds = map[Format][]string{
 	Normal: {"normal"},
+	Logrus: {"logrus"},
 	JSON:   {"json"},
 }
 
 var formatFormatters = map[Format]func() logrus.Formatter{
 	Normal: newNormalFormatter,
+	Logrus: newLogrusFormatter,
 	JSON:   newJSONFormatter,
 }
 
@@ -36,6 +38,10 @@ func SetFormat(format Format) error {
 }
 
 func newNormalFormatter() logrus.Formatter {
+	return &NormalFormatter{}
+}
+
+func newLogrusFormatter() logrus.Formatter {
 	return &logrus.TextFormatter{
 		FullTimestamp:          true,
 		TimestampFormat:        "2006-01-02 15:04:05",
@@ -47,4 +53,10 @@ func newNormalFormatter() logrus.Formatter {
 
 func newJSONFormatter() logrus.Formatter {
 	return &logrus.JSONFormatter{}
+}
+
+type NormalFormatter struct{}
+
+func (f *NormalFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	return []byte(entry.Message + "\n"), nil
 }
