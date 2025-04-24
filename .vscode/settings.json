@@ -1,3 +1,6 @@
 {
-  "cSpell.words": ["groundctl", "stretchr", "thediveo", "Tracef"]
+  "cSpell.words": ["amqp", "caser", "groundctl", "rabbitmq", "stretchr", "thediveo", "Tracef", "Vhost"],
+  "yaml.schemas": {
+    "internal/rabbitmq/gen/queue.schema.json": "internal/rabbitmq/gen/queues.yml"
+  }
 }
