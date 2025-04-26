@@ -1,6 +1,11 @@
 {
-  "cSpell.words": ["amqp", "caser", "groundctl", "rabbitmq", "stretchr", "thediveo", "Tracef", "Vhost"],
+  "cSpell.words": ["amqp", "caser", "groundctl", "rabbitmq", "stretchr", "thediveo", "Tracef", "unmarshal", "Vhost", "vhosts"],
   "yaml.schemas": {
-    "internal/rabbitmq/gen/queue.schema.json": "internal/rabbitmq/gen/queues.yml"
+    "internal/rabbitmq/config.schema.json": "internal/rabbitmq/config.yml"
+  },
+  "gopls": {
+    "build.templateExtensions": ["tmpl"],
+    "ui.semanticTokens": true,
+    "ui.completion.usePlaceholders": true
   }
 }
